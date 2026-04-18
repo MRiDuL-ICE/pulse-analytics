@@ -1,0 +1,29 @@
+# Never bake secrets into the image
+.env
+.env.*
+
+# Python cache — not needed in image
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local venv — image uses its own
+.venv/
+venv/
+
+# Editor
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Docs
+*.md
