@@ -5,8 +5,8 @@ from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import settings
-from app.core.database import Base
-from app.models import Tenant, User  # import all models so Alembic sees them
+from app.models import Base  # imports Base + triggers all model registrations
+from app.models import Event, FunnelStep, Funnel, Pageview, Tenant, User  # noqa: F401
 
 config = context.config
 fileConfig(config.config_file_name)

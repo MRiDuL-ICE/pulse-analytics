@@ -3,7 +3,8 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, get_redis
-from app.schemas import RefreshRequest, TokenOut, UserCreate, UserOut, LoginRequest
+from app.schemas.auth import RefreshRequest, TokenOut
+from app.schemas.user import UserCreate, UserOut, LoginRequest
 from app.services.auth import login_user, logout_user, refresh_tokens, register_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])

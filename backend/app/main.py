@@ -1,17 +1,19 @@
 from contextlib import asynccontextmanager
 # import time
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Depends
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
+from app.api.v1.analytics import router as analytics_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.events import router as events_router
 
 from app.api.deps import get_db, get_redis
 
 from app.core.database import engine
 from app.core.redis import close_redis_pool, get_redis_pool
-from app.models.process_res_time import process_res_time_middleware
+from app.middleware.process_res_time import process_res_time_middleware
 
 
 @asynccontextmanager
@@ -43,6 +45,8 @@ app.middleware("http")(process_res_time_middleware)
 
 
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(events_router, prefix="/api/v1")
+app.include_router(analytics_router, prefix="/api/v1")
 
 
 @app.get("/health")
