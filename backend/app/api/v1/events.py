@@ -1,8 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_tenant, get_db, get_redis
+from app.api.deps import get_current_tenant, get_redis
 from app.schemas.event import EventPayload
 from app.services.events import ingest_event
 from app.workers.cache_warmer import warm_tenant_cache
@@ -14,8 +13,7 @@ router = APIRouter(prefix="/events", tags=["events"])
 async def track_event(
     payload: EventPayload,
     request: Request,
-    background_tasks: BackgroundTasks,  # FastAPI injects this automatically
-    db: AsyncSession = Depends(get_db),
+    background_tasks: BackgroundTasks,
     redis: Redis = Depends(get_redis),
     tenant_id: str = Depends(get_current_tenant),
 ):
@@ -28,15 +26,12 @@ async def track_event(
         referrer=payload.referrer,
         user_agent=request.headers.get("user-agent"),
         ip_address=request.client.host if request.client else None,
-        db=db,
     )
 
-    # Runs after the response is sent — doesn't block the client
     background_tasks.add_task(
         warm_tenant_cache,
         tenant_id=tenant_id,
         redis=redis,
-        db=db,
     )
 
-    return {"accepted": True, "event_id": str(event.id)}
+    return {"accepted": True, "event_id": str(event["id"])}

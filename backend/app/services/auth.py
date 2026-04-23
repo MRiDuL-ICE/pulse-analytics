@@ -2,13 +2,8 @@ import uuid
 
 from fastapi import HTTPException, status
 from redis.asyncio import Redis
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Tenant, User
-from app.schemas.auth import TokenOut
-from app.schemas.user import UserCreate
-
+import app.core.db as db
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -16,67 +11,79 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.schemas.auth import TokenOut
+from app.schemas.user import UserCreate
 
 
-async def register_user(data: UserCreate, db: AsyncSession) -> User:
+async def register_user(data: UserCreate) -> dict:
     # Check email not already taken
-    existing = await db.execute(select(User).where(User.email == data.email))
-    if existing.scalar_one_or_none():
+    existing = await db.fetchrow(
+        "SELECT id FROM users WHERE email = $1",
+        data.email,
+    )
+    if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered",
         )
 
-    # Create tenant first
-    tenant = Tenant(
-        name=data.tenant_name,
-        slug=data.tenant_slug,
+    # Create tenant
+    tenant = await db.fetchrow(
+        """
+        INSERT INTO tenants (name, slug)
+        VALUES ($1, $2)
+        RETURNING id, name, slug, is_active, created_at
+        """,
+        data.tenant_name,
+        data.tenant_slug,
     )
-    db.add(tenant)
-    await db.flush()  # writes tenant to DB and gets its ID without committing
 
     # Create user
-    user = User(
-        tenant_id=tenant.id,
-        email=data.email,
-        hashed_password=hash_password(data.password),
+    user = await db.fetchrow(
+        """
+        INSERT INTO users (tenant_id, email, hashed_password)
+        VALUES ($1, $2, $3)
+        RETURNING id, tenant_id, email, is_active, created_at
+        """,
+        tenant["id"],
+        data.email,
+        hash_password(data.password),
     )
-    db.add(user)
-    await db.flush()
 
-    return user
+    return dict(user)
 
 
-async def login_user(email: str, password: str, db: AsyncSession) -> TokenOut:
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
+async def login_user(email: str, password: str) -> TokenOut:
+    user = await db.fetchrow(
+        "SELECT id, tenant_id, hashed_password, is_active FROM users WHERE email = $1",
+        email,
+    )
 
-    if not user or not verify_password(password, user.hashed_password):
+    if not user or not verify_password(password, user["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
 
-    if not user.is_active:
+    if not user["is_active"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is disabled",
         )
 
     access_token = create_access_token(
-        subject=str(user.id),
-        tenant_id=str(user.tenant_id),
+        subject=str(user["id"]),
+        tenant_id=str(user["tenant_id"]),
     )
     refresh_token = create_refresh_token(
-        subject=str(user.id),
-        tenant_id=str(user.tenant_id),
+        subject=str(user["id"]),
+        tenant_id=str(user["tenant_id"]),
     )
 
     return TokenOut(access_token=access_token, refresh_token=refresh_token)
 
 
 async def refresh_tokens(refresh_token: str, redis: Redis) -> TokenOut:
-    # Check if token is blacklisted
     is_blacklisted = await redis.get(f"blacklist:{refresh_token}")
     if is_blacklisted:
         raise HTTPException(
@@ -98,32 +105,29 @@ async def refresh_tokens(refresh_token: str, redis: Redis) -> TokenOut:
             detail="Invalid token type",
         )
 
-    # Blacklist the used refresh token immediately (rotation)
     await redis.set(
         f"blacklist:{refresh_token}",
         "1",
-        ex=60 * 60 * 24 * 7,  # expire after 7 days (same as token TTL)
+        ex=60 * 60 * 24 * 7,
     )
 
-    # Issue fresh pair
-    new_access = create_access_token(
-        subject=payload["sub"],
-        tenant_id=payload["tenant_id"],
+    return TokenOut(
+        access_token=create_access_token(
+            subject=payload["sub"],
+            tenant_id=payload["tenant_id"],
+        ),
+        refresh_token=create_refresh_token(
+            subject=payload["sub"],
+            tenant_id=payload["tenant_id"],
+        ),
     )
-    new_refresh = create_refresh_token(
-        subject=payload["sub"],
-        tenant_id=payload["tenant_id"],
-    )
-
-    return TokenOut(access_token=new_access, refresh_token=new_refresh)
 
 
 async def logout_user(refresh_token: str, redis: Redis) -> None:
     try:
-        payload = decode_token(refresh_token)
+        decode_token(refresh_token)
     except ValueError:
-        return  # already invalid, nothing to blacklist
-
+        return
     await redis.set(
         f"blacklist:{refresh_token}",
         "1",

@@ -1,9 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models import Event, Pageview
+import app.core.db as db
 
 
 async def ingest_event(
@@ -15,33 +13,47 @@ async def ingest_event(
     referrer: str | None,
     user_agent: str | None,
     ip_address: str | None,
-    db: AsyncSession,
-) -> Event:
-    event = Event(
-        id=uuid.uuid4(),
-        tenant_id=uuid.UUID(tenant_id),
-        event_type=event_type,
-        session_id=session_id,
-        url=url,
-        referrer=referrer,
-        user_agent=user_agent,
-        ip_address=ip_address,
-        properties=properties,
-        occurred_at=datetime.now(timezone.utc),
-    )
-    db.add(event)
+) -> dict:
+    import json
+    occurred_at = datetime.now(timezone.utc)
+    event_id = uuid.uuid4()
 
-    # If it's a pageview, also write to the dedicated pageviews table
-    if event_type == "pageview":
-        pageview = Pageview(
-            tenant_id=uuid.UUID(tenant_id),
-            url=url or "",
-            title=properties.get("title"),
-            duration_ms=properties.get("duration_ms"),
-            session_id=session_id,
-            occurred_at=event.occurred_at,
+    event = await db.fetchrow(
+        """
+        INSERT INTO events (
+            id, tenant_id, event_type, session_id,
+            user_agent, ip_address, url, referrer,
+            properties, occurred_at
         )
-        db.add(pageview)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING id, tenant_id, event_type, url, occurred_at
+        """,
+        event_id,
+        uuid.UUID(tenant_id),
+        event_type,
+        session_id,
+        user_agent,
+        ip_address,
+        url,
+        referrer,
+        json.dumps(properties),
+        occurred_at,
+    )
 
-    await db.flush()
-    return event
+    if event_type == "pageview":
+        await db.execute(
+            """
+            INSERT INTO pageviews (
+                tenant_id, url, title, duration_ms, session_id, occurred_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+            """,
+            uuid.UUID(tenant_id),
+            url or "",
+            properties.get("title"),
+            properties.get("duration_ms"),
+            session_id,
+            occurred_at,
+        )
+
+    return dict(event)

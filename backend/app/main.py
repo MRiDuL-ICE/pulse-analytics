@@ -1,37 +1,30 @@
 from contextlib import asynccontextmanager
-# import time
-from fastapi import FastAPI, Depends
-from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+
+from fastapi import FastAPI
 
 from app.api.v1.analytics import router as analytics_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.events import router as events_router
-
-from app.api.deps import get_db, get_redis
-
-from app.core.database import engine
+from app.core.db import create_pool, close_pool
 from app.core.redis import close_redis_pool, get_redis_pool
-from app.middleware.process_res_time import process_res_time_middleware
 from app.middleware.rate_limit import RateLimitMiddleware
+from app.middleware.process_res_time import process_res_time_middleware
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ── Startup ──────────────────────────────────────────
-    print("Starting up — initialising connection pools...")
-    get_redis_pool()          # warms up the Redis pool
-    # DB engine pool is created lazily on first use by SQLAlchemy
-    print("Connection pools ready.")
+    print("Starting up...")
+    await create_pool()       # asyncpg pool
+    get_redis_pool()          # redis pool
+    print("All pools ready.")
 
-    yield  # app runs here
+    yield
 
-    # ── Shutdown ─────────────────────────────────────────
-    print("Shutting down — closing connection pools...")
+    print("Shutting down...")
+    await close_pool()
     await close_redis_pool()
-    await engine.dispose()    # closes all Postgres connections cleanly
-    print("Pools closed. Goodbye.")
+    print("All pools closed.")
+
 
 
 app = FastAPI(
@@ -55,15 +48,3 @@ app.include_router(analytics_router, prefix="/api/v1")
 async def health():
     return {"status": "ok"}
 
-
-@app.get("/health/db")
-async def health_db(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(text("SELECT 1"))
-    return {"db": "ok", "result": result.scalar()}
-
-
-@app.get("/health/redis")
-async def health_redis(redis: Redis = Depends(get_redis)):
-    await redis.set("ping", "pong", ex=10)
-    value = await redis.get("ping")
-    return {"redis": "ok", "value": value}
