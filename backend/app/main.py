@@ -14,6 +14,7 @@ from app.api.deps import get_db, get_redis
 from app.core.database import engine
 from app.core.redis import close_redis_pool, get_redis_pool
 from app.middleware.process_res_time import process_res_time_middleware
+from app.middleware.rate_limit import RateLimitMiddleware
 
 
 @asynccontextmanager
@@ -41,6 +42,7 @@ app = FastAPI(
 
 
 app.middleware("http")(process_res_time_middleware)
+app.add_middleware(RateLimitMiddleware)
 
 
 

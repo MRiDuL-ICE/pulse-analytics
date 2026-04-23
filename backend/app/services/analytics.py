@@ -1,10 +1,20 @@
 import uuid
 from datetime import datetime
 
+from redis.asyncio import Redis
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Pageview
+from app.services.cache import (
+    get_cached,
+    make_event_breakdown_key,
+    make_pageviews_key,
+    make_top_pages_key,
+    set_cached,
+)
+
+CACHE_TTL = 300  # 5 minutes
 
 
 async def get_pageview_counts(
@@ -12,11 +22,15 @@ async def get_pageview_counts(
     start: datetime,
     end: datetime,
     db: AsyncSession,
+    redis: Redis,
 ) -> list[dict]:
-    """
-    Returns hourly pageview counts for a tenant within a time range.
-    Uses TimescaleDB's time_bucket() for efficient rollups.
-    """
+    # 1. Check cache first
+    key = make_pageviews_key(tenant_id, start, end)
+    cached = await get_cached(redis, key)
+    if cached is not None:
+        return cached
+
+    # 2. Cache miss — query Postgres
     query = text("""
         SELECT
             time_bucket('1 hour', occurred_at) AS bucket,
@@ -29,17 +43,15 @@ async def get_pageview_counts(
         GROUP BY bucket
         ORDER BY bucket ASC
     """)
-
     result = await db.execute(
         query,
-        {
-            "tenant_id": str(tenant_id),
-            "start": start,
-            "end": end,
-        },
+        {"tenant_id": str(tenant_id), "start": start, "end": end},
     )
-    rows = result.fetchall()
-    return [{"bucket": row.bucket.isoformat(), "count": row.count} for row in rows]
+    data = [{"bucket": row.bucket.isoformat(), "count": row.count} for row in result.fetchall()]
+
+    # 3. Write to cache
+    await set_cached(redis, key, data, ttl_seconds=CACHE_TTL)
+    return data
 
 
 async def get_top_pages(
@@ -48,7 +60,13 @@ async def get_top_pages(
     end: datetime,
     limit: int,
     db: AsyncSession,
+    redis: Redis,
 ) -> list[dict]:
+    key = make_top_pages_key(tenant_id, start, end, limit)
+    cached = await get_cached(redis, key)
+    if cached is not None:
+        return cached
+
     result = await db.execute(
         select(Pageview.url, func.count().label("count"))
         .where(
@@ -60,7 +78,10 @@ async def get_top_pages(
         .order_by(func.count().desc())
         .limit(limit)
     )
-    return [{"url": row.url, "count": row.count} for row in result.fetchall()]
+    data = [{"url": row.url, "count": row.count} for row in result.fetchall()]
+
+    await set_cached(redis, key, data, ttl_seconds=CACHE_TTL)
+    return data
 
 
 async def get_event_breakdown(
@@ -68,7 +89,13 @@ async def get_event_breakdown(
     start: datetime,
     end: datetime,
     db: AsyncSession,
+    redis: Redis,
 ) -> list[dict]:
+    key = make_event_breakdown_key(tenant_id, start, end)
+    cached = await get_cached(redis, key)
+    if cached is not None:
+        return cached
+
     result = await db.execute(
         select(Event.event_type, func.count().label("count"))
         .where(
@@ -79,4 +106,7 @@ async def get_event_breakdown(
         .group_by(Event.event_type)
         .order_by(func.count().desc())
     )
-    return [{"event_type": row.event_type, "count": row.count} for row in result.fetchall()]
+    data = [{"event_type": row.event_type, "count": row.count} for row in result.fetchall()]
+
+    await set_cached(redis, key, data, ttl_seconds=CACHE_TTL)
+    return data
