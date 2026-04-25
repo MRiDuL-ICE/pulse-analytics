@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     postgres_host: str
     postgres_port: int = 5432
 
+    # Read replica (optional)
+    postgres_replica_host: str | None = None
+    postgres_replica_port: int = 5432
+
     # Redis
     redis_host: str
     redis_port: int = 6379
@@ -30,6 +34,10 @@ class Settings(BaseSettings):
             f"{self.postgres_password}@{self.postgres_host}:"
             f"{self.postgres_port}/{self.postgres_db}"
         )
+
+    @property
+    def replica_available(self) -> bool:
+        return self.postgres_replica_host is not None
 
     @property
     def redis_url(self) -> str:

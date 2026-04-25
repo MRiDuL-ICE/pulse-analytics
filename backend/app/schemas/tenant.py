@@ -17,3 +17,9 @@ class TenantOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+class TenantUpdate(BaseModel):
+    name: str
+    slug: str
+    is_active: bool
+    created_at: datetime
