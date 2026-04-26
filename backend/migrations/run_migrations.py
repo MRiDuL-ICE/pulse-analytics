@@ -44,11 +44,13 @@ async def run():
 
         print(f"  applying {sql_file.name} ...")
         sql = sql_file.read_text()
-        await conn.execute(sql)
-        await conn.execute(
-            "INSERT INTO migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING",
-            sql_file.name,
-        )
+
+        async with conn.transaction():
+            await conn.execute(sql)
+            await conn.execute(
+                "INSERT INTO migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING",
+                sql_file.name,
+            )
         print(f"  done ✓")
 
     await conn.close()

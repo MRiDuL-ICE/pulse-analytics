@@ -68,6 +68,16 @@ services:
       timeout: 5s
       retries: 5
 
+  db_test:
+    image: timescale/timescaledb:latest-pg17
+    platform: linux/arm64
+    environment:
+      POSTGRES_DB: ${POSTGRES_TEST_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5435:5432"
+
   redis:
     image: redis:7-alpine
     platform: linux/arm64
