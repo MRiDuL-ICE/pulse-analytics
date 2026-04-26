@@ -76,25 +76,28 @@ async def list_api_keys(tenant_id: str) -> list[dict]:
     return [dict(row) for row in rows]
 
 
-async def revoke_api_key(key_id: str, tenant_id: str) -> None:
-    """
-    Revokes an API key by setting is_active = false.
-    Verifies the key belongs to the requesting tenant — tenants cannot
-    revoke each other's keys.
-    """
+async def revoke_api_key(key_id: str, tenant_id: str) -> dict:
     row = await db.fetchrow(
-        "SELECT id FROM api_keys WHERE id = $1 AND tenant_id = $2",
+        """
+        UPDATE api_keys
+        SET is_active = FALSE
+        WHERE id = $1
+          AND tenant_id = $2
+        RETURNING id
+        """,
         uuid.UUID(key_id),
         uuid.UUID(tenant_id),
     )
+
     if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="API key not found",
         )
-    await db.execute(
-        "UPDATE api_keys SET is_active = FALSE WHERE id = $1",
-        uuid.UUID(key_id),
+
+    raise HTTPException(
+        status_code=status.HTTP_200_OK,
+        detail="API key revoked successfully",
     )
 
 

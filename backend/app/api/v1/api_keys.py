@@ -28,7 +28,7 @@ async def get_api_keys(
     return await list_api_keys(tenant_id)
 
 
-@router.delete("/{key_id}", status_code=204)
+@router.delete("/{key_id}", status_code=200)
 async def delete_api_key(
     key_id: str,
     tenant_id: str = Depends(get_current_tenant),
