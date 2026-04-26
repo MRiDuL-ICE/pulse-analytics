@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from redis.asyncio import Redis
 
-from app.api.deps import get_current_tenant, get_redis
+from app.api.deps import get_redis, get_tenant_from_api_key_or_jwt
 from app.schemas.event import EventPayload
 from app.services.events import ingest_event
 from app.workers.cache_warmer import warm_tenant_cache
@@ -15,7 +15,7 @@ async def track_event(
     request: Request,
     background_tasks: BackgroundTasks,
     redis: Redis = Depends(get_redis),
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(get_tenant_from_api_key_or_jwt),
 ):
     event = await ingest_event(
         tenant_id=tenant_id,

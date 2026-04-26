@@ -11,6 +11,7 @@ from app.core.db import close_pool, create_pool
 from app.core.redis import close_redis_pool, get_redis_pool
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.process_res_time import process_res_time_middleware
+from app.api.v1.api_keys import router as api_keys_router
 
 
 @asynccontextmanager
@@ -42,6 +43,7 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(events_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(tenants_router, prefix="/api/v1")
+app.include_router(api_keys_router, prefix="/api/v1")
 
 
 @app.get("/health")
