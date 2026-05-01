@@ -12,6 +12,8 @@ from app.core.redis import close_redis_pool, get_redis_pool
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.process_res_time import process_res_time_middleware
 from app.api.v1.api_keys import router as api_keys_router
+from fastapi.middleware.cors import CORSMiddleware
+
 
 
 @asynccontextmanager
@@ -34,6 +36,21 @@ app = FastAPI(
     title="Pulse Analytics",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+origins = [
+    "http://localhost:3000",   # Next.js default
+    "http://127.0.0.1:3000",
+    "http://localhost:4000",   # Next.js default
+    "http://127.0.0.1:4000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],   # or specify ["GET", "POST"]
+    allow_headers=["*"],
 )
 
 app.middleware("http")(process_res_time_middleware)
