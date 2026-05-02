@@ -40,6 +40,8 @@ app = FastAPI(
 )
 
 origins = [
+    "http://localhost",   # Next.js default
+    "http://127.0.0.1",
     "http://localhost:3000",   # Next.js default
     "http://127.0.0.1:3000",
     "http://localhost:4000",   # Next.js default
