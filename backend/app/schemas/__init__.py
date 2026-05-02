@@ -4,6 +4,7 @@ from app.schemas.auth import LoginRequest, TokenOut, RefreshRequest
 from app.schemas.event import EventPayload, EventOut
 from app.schemas.analytics import PageviewBucket, TopPage, EventTypeCount
 from app.schemas.api_key import ApiKeyCreate, ApiKeyCreated, ApiKeyOut
+from app.schemas.site import SiteCreate, SiteUpdate, SiteOut
 
 __all__ = [
     "TenantCreate",
@@ -21,4 +22,7 @@ __all__ = [
     "ApiKeyCreate",
     "ApiKeyCreated",
     "ApiKeyOut",
+    "SiteCreate",
+    "SiteUpdate",
+    "SiteOut",
 ]

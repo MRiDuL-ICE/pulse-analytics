@@ -6,11 +6,13 @@ from pydantic import BaseModel
 
 class ApiKeyCreate(BaseModel):
     name: str
+    site_id: uuid.UUID
 
 
 class ApiKeyOut(BaseModel):
     id: uuid.UUID
     tenant_id: uuid.UUID
+    site_id: uuid.UUID | None
     name: str
     key_prefix: str
     is_active: bool

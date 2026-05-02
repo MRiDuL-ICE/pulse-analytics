@@ -54,7 +54,7 @@ async def get_current_tenant(
 async def get_tenant_from_api_key_or_jwt(
     x_api_key: str | None = Header(default=None),
     credentials: HTTPAuthorizationCredentials | None = Depends(http_bearer),
-) -> str:
+) -> tuple[str, str | None]:
     """
     Dual authentication dependency for the events endpoint.
 
@@ -67,9 +67,9 @@ async def get_tenant_from_api_key_or_jwt(
     # Try API key first
     if x_api_key:
         from app.services.api_keys import verify_api_key
-        tenant_id = await verify_api_key(x_api_key)
-        if tenant_id:
-            return tenant_id
+        result = await verify_api_key(x_api_key)
+        if result:
+            return result
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key",
@@ -95,7 +95,7 @@ async def get_tenant_from_api_key_or_jwt(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No tenant associated with this token",
             )
-        return tenant_id
+        return tenant_id, None
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

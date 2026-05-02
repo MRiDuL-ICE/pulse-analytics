@@ -34,7 +34,14 @@ def _extract_prefix(raw_key: str) -> str:
     return raw_key[:15]
 
 
-async def create_api_key(tenant_id: str, name: str) -> dict:
+async def create_api_key(tenant_id: str, site_id: str, name: str) -> dict:
+    site = await db.fetchrow(
+        "SELECT id FROM sites WHERE id = $1 AND tenant_id = $2 AND is_active = TRUE",
+        uuid.UUID(site_id), uuid.UUID(tenant_id),
+    )
+    if not site:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Site not found")
+
     """
     Creates a new write-only API key for a tenant.
     Returns the raw key ONCE — it is never stored and cannot be retrieved again.
@@ -45,11 +52,12 @@ async def create_api_key(tenant_id: str, name: str) -> dict:
 
     row = await db.fetchrow(
         """
-        INSERT INTO api_keys (tenant_id, name, key_prefix, key_hash)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, tenant_id, name, key_prefix, is_active, created_at
+        INSERT INTO api_keys (tenant_id, site_id, name, key_prefix, key_hash)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, tenant_id, site_id, name, key_prefix, is_active, created_at
         """,
         uuid.UUID(tenant_id),
+        uuid.UUID(site_id),
         name,
         prefix,
         key_hash,
@@ -62,46 +70,62 @@ async def create_api_key(tenant_id: str, name: str) -> dict:
     return result
 
 
-async def list_api_keys(tenant_id: str) -> list[dict]:
+async def list_api_keys(tenant_id: str, site_id: str | None = None) -> list[dict]:
     """Lists all API keys for a tenant — never returns the raw key."""
-    rows = await db.fetch(
-        """
-        SELECT id, tenant_id, name, key_prefix, is_active, last_used_at, created_at
-        FROM api_keys
-        WHERE tenant_id = $1
-        ORDER BY created_at DESC
-        """,
-        uuid.UUID(tenant_id),
-    )
+    if site_id:
+        rows = await db.fetch(
+            """
+            SELECT id,
+                   tenant_id,
+                   site_id,
+                   name,
+                   key_prefix,
+                   is_active,
+                   last_used_at,
+                   created_at
+            FROM api_keys
+            WHERE tenant_id = $1
+              AND site_id = $2
+            ORDER BY created_at DESC
+            """,
+            uuid.UUID(tenant_id), uuid.UUID(site_id),
+        )
+    else:
+        rows = await db.fetch(
+            """
+            SELECT id,
+                   tenant_id,
+                   site_id,
+                   name,
+                   key_prefix,
+                   is_active,
+                   last_used_at,
+                   created_at
+            FROM api_keys
+            WHERE tenant_id = $1
+            ORDER BY created_at DESC
+            """,
+            uuid.UUID(tenant_id),
+        )
     return [dict(row) for row in rows]
 
 
 async def revoke_api_key(key_id: str, tenant_id: str) -> dict:
     row = await db.fetchrow(
-        """
-        UPDATE api_keys
-        SET is_active = FALSE
-        WHERE id = $1
-          AND tenant_id = $2
-        RETURNING id
-        """,
-        uuid.UUID(key_id),
-        uuid.UUID(tenant_id),
+        "SELECT id FROM api_keys WHERE id = $1 AND tenant_id = $2",
+        uuid.UUID(key_id), uuid.UUID(tenant_id),
     )
-
     if not row:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="API key not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+    await db.execute("UPDATE api_keys SET is_active = FALSE WHERE id = $1", uuid.UUID(key_id))
 
     raise HTTPException(
-        status_code=status.HTTP_200_OK,
-        detail="API key revoked successfully",
-    )
+            status_code=status.HTTP_200_OK,
+            detail="API key revoked successfully",
+        )
 
 
-async def verify_api_key(raw_key: str) -> str | None:
+async def verify_api_key(raw_key: str) -> tuple[str, str] | None:
     """
     Validates an incoming API key from a request header.
     Returns the tenant_id if valid, None if invalid.
@@ -113,21 +137,17 @@ async def verify_api_key(raw_key: str) -> str | None:
 
     rows = await db.fetch(
         """
-        SELECT id, tenant_id, key_hash
-        FROM api_keys
-        WHERE key_prefix = $1
-          AND is_active = TRUE
+        SELECT ak.id, ak.tenant_id, ak.site_id, ak.key_hash
+        FROM api_keys ak
+        WHERE ak.key_prefix = $1
+          AND ak.is_active = TRUE
         """,
         prefix,
     )
-
     for row in rows:
         if _verify_key(raw_key, row["key_hash"]):
-            # Update last_used_at without blocking the response
             await db.execute(
-                "UPDATE api_keys SET last_used_at = NOW() WHERE id = $1",
-                row["id"],
+                "UPDATE api_keys SET last_used_at = NOW() WHERE id = $1", row["id"]
             )
-            return str(row["tenant_id"])
-
+            return str(row["tenant_id"]), str(row["site_id"])
     return None

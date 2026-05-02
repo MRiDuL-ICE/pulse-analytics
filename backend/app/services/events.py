@@ -6,6 +6,7 @@ import app.core.db as db
 
 async def ingest_event(
     tenant_id: str,
+    site_id: str | None,
     event_type: str,
     properties: dict,
     session_id: str | None,
@@ -17,43 +18,29 @@ async def ingest_event(
     import json
     occurred_at = datetime.now(timezone.utc)
     event_id = uuid.uuid4()
+    site_uuid = uuid.UUID(site_id) if site_id else None
 
     event = await db.fetchrow(
         """
-        INSERT INTO events (
-            id, tenant_id, event_type, session_id,
-            user_agent, ip_address, url, referrer,
-            properties, occurred_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        RETURNING id, tenant_id, event_type, url, occurred_at
+        INSERT INTO events (id, tenant_id, site_id, event_type, session_id,
+                            user_agent, ip_address, url, referrer, properties, occurred_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING id, tenant_id, site_id, event_type, url, occurred_at
         """,
-        event_id,
-        uuid.UUID(tenant_id),
-        event_type,
-        session_id,
-        user_agent,
-        ip_address,
-        url,
-        referrer,
-        json.dumps(properties),
-        occurred_at,
+        event_id, uuid.UUID(tenant_id), site_uuid, event_type,
+        session_id, user_agent, ip_address, url, referrer,
+        json.dumps(properties), occurred_at,
     )
 
     if event_type == "pageview":
         await db.execute(
             """
-            INSERT INTO pageviews (
-                tenant_id, url, title, duration_ms, session_id, occurred_at
-            )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO pageviews (tenant_id, site_id, url, title, duration_ms, session_id, occurred_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             """,
-            uuid.UUID(tenant_id),
-            url or "",
-            properties.get("title"),
-            properties.get("duration_ms"),
-            session_id,
-            occurred_at,
+            uuid.UUID(tenant_id), site_uuid, url or "",
+            properties.get("title"), properties.get("duration_ms"),
+            session_id, occurred_at,
         )
 
     return dict(event)
