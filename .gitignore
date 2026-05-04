@@ -39,3 +39,5 @@ logs/
 node_modules/
 .next/
 frontend/.env.local
+
+certs/

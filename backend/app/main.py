@@ -46,6 +46,7 @@ origins = [
     "http://127.0.0.1:3000",
     "http://localhost:4000",   # Next.js default
     "http://127.0.0.1:4000",
+    "https://pulsehere.vercel.app"
 ]
 
 app.add_middleware(

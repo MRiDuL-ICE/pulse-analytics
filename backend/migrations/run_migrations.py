@@ -4,18 +4,26 @@ Applies any .sql files in /app/migrations/ that haven't been run yet.
 """
 import asyncio
 import os
+import ssl
+
 from pathlib import Path
 
 import asyncpg
 
 
 async def run():
+    # SSL for Aiven
+    ssl_ctx = ssl.create_default_context(cafile="/app/certs/ca.pem")
+    ssl_ctx.check_hostname = True
+    ssl_ctx.verify_mode = ssl.CERT_REQUIRED
+
     conn = await asyncpg.connect(
         host=os.environ["POSTGRES_HOST"],
         port=int(os.environ["POSTGRES_PORT"]),
         user=os.environ["POSTGRES_USER"],
         password=os.environ["POSTGRES_PASSWORD"],
         database=os.environ["POSTGRES_DB"],
+        ssl=ssl_ctx,
     )
 
     # Ensure the migrations tracking table exists

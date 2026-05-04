@@ -1,6 +1,11 @@
 import asyncpg
+import ssl
 
 from app.core.config import settings
+
+_ssl_context = ssl.create_default_context(cafile="/app/certs/ca.pem")
+_ssl_context.check_hostname = True
+_ssl_context.verify_mode = ssl.CERT_REQUIRED
 
 # Primary pool — all writes go here
 _primary_pool: asyncpg.Pool | None = None
@@ -21,6 +26,7 @@ async def create_pool() -> None:
         min_size=5,
         max_size=20,
         command_timeout=30,
+        ssl=_ssl_context,
     )
 
     # Try to connect to replica — fall back to primary if unavailable
@@ -36,6 +42,7 @@ async def create_pool() -> None:
                 min_size=3,
                 max_size=15,
                 command_timeout=5,  # short timeout so startup isn't delayed
+                ssl=_ssl_context,
             )
             print("Replica pool connected.")
         except Exception as e:
