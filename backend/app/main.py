@@ -21,9 +21,12 @@ from app.api.v1.sites import router as sites_router
 async def lifespan(app: FastAPI):
     worker_id = os.environ.get("WORKER_ID", "unknown")
     print(f"Worker {worker_id} starting up...")
+    from migrations.run_migrations import run as run_migrations
     await create_pool()
     get_redis_pool()
     print(f"Worker {worker_id} — all pools ready.")
+    await run_migrations()
+    print(f"migration completed.")
 
     yield
 
