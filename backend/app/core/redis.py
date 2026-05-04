@@ -12,6 +12,8 @@ def get_redis_pool() -> ConnectionPool:
         _pool = ConnectionPool.from_url(
             settings.redis_url,
             max_connections=20,
+            ssl_cert_reqs=None,  # ← don't verify Upstash cert
+            socket_connect_timeout=10,
             decode_responses=True,   # return str instead of bytes
         )
     return _pool
