@@ -18,8 +18,7 @@ class Settings(BaseSettings):
     postgres_test_port: int
 
     # Redis
-    redis_host: str
-    redis_port: int = 6379
+    redis_url: str = "redis://localhost:6379"
 
     # App
     secret_key: str
@@ -46,10 +45,6 @@ class Settings(BaseSettings):
     @property
     def replica_test_available(self) -> bool:
         return self.postgres_test_host is not None
-
-    @property
-    def redis_url(self) -> str:
-        return f"redis://{self.redis_host}:{self.redis_port}"
 
 
 settings = Settings()
