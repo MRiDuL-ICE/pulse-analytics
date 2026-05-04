@@ -10,12 +10,16 @@ from pathlib import Path
 
 import asyncpg
 
+_cert_path = "/app/certs/ca.pem"
+
+if os.path.exists(_cert_path):
+    _ssl_context = ssl.create_default_context(cafile=_cert_path)
+    _ssl_context.check_hostname = True
+    _ssl_context.verify_mode = ssl.CERT_REQUIRED
+else:
+    _ssl_context = None
 
 async def run():
-    # SSL for Aiven
-    ssl_ctx = ssl.create_default_context(cafile="/app/certs/ca.pem")
-    ssl_ctx.check_hostname = True
-    ssl_ctx.verify_mode = ssl.CERT_REQUIRED
 
     conn = await asyncpg.connect(
         host=os.environ["POSTGRES_HOST"],
@@ -23,7 +27,7 @@ async def run():
         user=os.environ["POSTGRES_USER"],
         password=os.environ["POSTGRES_PASSWORD"],
         database=os.environ["POSTGRES_DB"],
-        ssl=ssl_ctx,
+        ssl=_ssl_context,
     )
 
     # Ensure the migrations tracking table exists

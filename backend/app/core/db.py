@@ -1,11 +1,17 @@
 import asyncpg
 import ssl
+import os
 
 from app.core.config import settings
 
-_ssl_context = ssl.create_default_context(cafile="/app/certs/ca.pem")
-_ssl_context.check_hostname = True
-_ssl_context.verify_mode = ssl.CERT_REQUIRED
+_cert_path = "/app/certs/ca.pem"
+
+if os.path.exists(_cert_path):
+    _ssl_context = ssl.create_default_context(cafile=_cert_path)
+    _ssl_context.check_hostname = True
+    _ssl_context.verify_mode = ssl.CERT_REQUIRED
+else:
+    _ssl_context = None
 
 # Primary pool — all writes go here
 _primary_pool: asyncpg.Pool | None = None
