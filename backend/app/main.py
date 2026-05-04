@@ -2,6 +2,8 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+import sys
+
 
 from app.api.v1.analytics import router as analytics_router
 from app.api.v1.auth import router as auth_router
@@ -25,8 +27,10 @@ async def lifespan(app: FastAPI):
     await create_pool()
     get_redis_pool()
     print(f"Worker {worker_id} — all pools ready.")
+    # Run migrations before starting
+    sys.path.insert(0, "/app")
+    from migrations.run_migrations import run as run_migrations
     await run_migrations()
-    print(f"migration completed.")
 
     yield
 
