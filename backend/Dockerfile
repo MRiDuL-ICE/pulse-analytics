@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY certs/ca.pem /app/certs/ca.pem
+#COPY certs/ca.pem /app/certs/ca.pem
 
 # Copy app code
 COPY . .
